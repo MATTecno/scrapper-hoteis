@@ -35,6 +35,8 @@ class AppWindow(ctk.CTk):
         self._build_ui()
         # Verifica setup (Chromium) e atualizações após a janela estar visível
         self.after(200, self._verificar_setup_inicial)
+        # Verifica atualizações silenciosamente após 3 s
+        self.after(3000, self._verificar_atualizacao_silenciosa)
 
     # ─────────────────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -191,6 +193,20 @@ class AppWindow(ctk.CTk):
             btn_frame, text="Salvar logs", variable=self.var_logs,
             font=ctk.CTkFont(size=12), text_color=SUBTEXTO,
             checkbox_width=18, checkbox_height=18,
+        ).pack(side="left", padx=(0, 16))
+
+        # Iniciar com o sistema
+        try:
+            from autostart import esta_ativo
+            autostart_inicial = esta_ativo()
+        except Exception:
+            autostart_inicial = False
+        self.var_autostart = tk.BooleanVar(value=autostart_inicial)
+        ctk.CTkCheckBox(
+            btn_frame, text="Iniciar com o sistema", variable=self.var_autostart,
+            font=ctk.CTkFont(size=12), text_color=SUBTEXTO,
+            checkbox_width=18, checkbox_height=18,
+            command=self._on_toggle_autostart,
         ).pack(side="left")
 
     # ── Painel de resultados com abas ─────────────────────────────────────────
@@ -703,6 +719,63 @@ class AppWindow(ctk.CTk):
             self.after(0, lambda: modal.on_resultado(release, CURRENT_VERSION))
         except Exception as exc:
             self.after(0, lambda e=str(exc): modal.on_erro(e))
+
+    def _verificar_atualizacao_silenciosa(self):
+        """Verifica atualizações em background. Se houver, mostra banner discreto."""
+        def _thread():
+            try:
+                from updater import verificar_atualizacao
+                release = verificar_atualizacao()
+                if release:
+                    tag = release.get("tag_name", "nova versão")
+                    self.after(0, lambda r=release, t=tag: self._mostrar_banner_atualizacao(r, t))
+            except Exception:
+                pass
+        threading.Thread(target=_thread, daemon=True).start()
+
+    def _mostrar_banner_atualizacao(self, release: dict, tag: str):
+        """Exibe um banner no topo da janela avisando sobre nova versão."""
+        banner = ctk.CTkFrame(self, fg_color="#1d4ed8", corner_radius=0, height=36)
+        banner.grid(row=0, column=0, sticky="ew")  # sobrepõe o header temporariamente
+        banner.grid_propagate(False)
+        banner.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            banner,
+            text=f"  Nova versão disponível: {tag}  —  clique em ⚙ para atualizar",
+            font=ctk.CTkFont(size=12),
+            text_color=BRANCO,
+        ).grid(row=0, column=0, sticky="w", padx=12)
+
+        ctk.CTkButton(
+            banner, text="✕", width=28, height=28,
+            fg_color="transparent", hover_color="#1e40af",
+            text_color=BRANCO, font=ctk.CTkFont(size=13),
+            command=lambda: self._fechar_banner(banner),
+        ).grid(row=0, column=1, padx=8)
+
+        # Auto-fecha após 15 s
+        self.after(15000, lambda: self._fechar_banner(banner))
+
+    def _fechar_banner(self, banner):
+        try:
+            banner.grid_forget()
+            banner.destroy()
+        except Exception:
+            pass
+
+    def _on_toggle_autostart(self):
+        try:
+            from autostart import ativar, desativar
+            if self.var_autostart.get():
+                ativar()
+            else:
+                desativar()
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Erro", f"Não foi possível alterar inicialização automática:\n{e}")
+            # reverte o checkbox
+            self.var_autostart.set(not self.var_autostart.get())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
