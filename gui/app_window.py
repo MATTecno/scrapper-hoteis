@@ -792,10 +792,10 @@ class _ModalAtualizacao(ctk.CTkToplevel):
         self.minsize(480, 360)
         self.resizable(True, True)
         self.configure(fg_color=BRANCO)
-        self.grab_set()
         self.transient(parent)
         self._download_url = None
         self._build_ui()
+        self.after(50, self.grab_set)
 
         # Centraliza
         self.update_idletasks()
