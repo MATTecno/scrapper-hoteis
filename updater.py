@@ -13,8 +13,8 @@ import json
 
 CURRENT_VERSION = "1.0.0"
 
-GITHUB_OWNER = "mattecnologia"
-GITHUB_REPO  = "scrapping-booking"
+GITHUB_OWNER = "MATTecno"
+GITHUB_REPO  = "scrapper-hoteis"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
