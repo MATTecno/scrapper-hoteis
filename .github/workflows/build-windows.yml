@@ -1,0 +1,60 @@
+name: Build Windows EXE
+
+on:
+  push:
+    tags:
+      - "v*"          # dispara em tags como v1.0.0, v1.2.3
+  workflow_dispatch:  # permite rodar manualmente pela UI do GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.44.0 customtkinter>=5.2.0 openpyxl>=3.1.0 pyinstaller
+
+      - name: Instalar Chromium do Playwright
+        run: playwright install chromium
+
+      - name: Build com PyInstaller
+        run: pyinstaller scrapper_hoteis_win.spec --clean
+
+      - name: Verificar executável gerado
+        run: dir dist\
+
+      - name: Upload do EXE como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScrapperHoteis-Windows
+          path: dist\ScrapperHoteis.exe
+          retention-days: 30
+
+      # Se for uma tag, cria uma Release no GitHub automaticamente
+      - name: Criar Release no GitHub
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist\ScrapperHoteis.exe
+          name: "ScrapperHoteis ${{ github.ref_name }}"
+          body: |
+            ## ScrapperHoteis ${{ github.ref_name }}
+
+            ### Instalação
+            1. Baixe o arquivo `ScrapperHoteis.exe`
+            2. Execute uma vez com internet para o Chromium ser instalado automaticamente
+            3. Abra o aplicativo e comece a buscar
+
+            > Desenvolvido por **MATTecnologia — Marcelo Teixeira**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

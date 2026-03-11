@@ -20,7 +20,6 @@ rate_shopper.xlsx
 # PyInstaller
 dist/
 build/
-*.spec
 
 # Logs e temporários
 *.log
