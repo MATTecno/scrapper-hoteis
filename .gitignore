@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Outputs gerados pelo scraper (dados, não código)
+resultados.csv
+resultados.json
+resultados_raw.json
+rate_shopper.csv
+rate_shopper.json
+rate_shopper.xlsx
+*.csv
+*.json
+*.xlsx
+
+# PyInstaller
+dist/
+build/
+*.spec
+
+# Logs e temporários
+*.log
+debug.html
+
+# OS
+.DS_Store
+Thumbs.db
