@@ -175,14 +175,18 @@ def calcular_economia(preco_original: str | None, preco_final: str | None) -> fl
     return None
 
 
-def _scrape_paginas(page, checkin: str, checkout: str, paginas: int) -> list[dict]:
+def _scrape_paginas(page, checkin: str, checkout: str, paginas: int,
+                    on_progress=None) -> list[dict]:
     """Coleta hotéis de múltiplas páginas para um par checkin/checkout."""
     hoteis = []
     cookie_fechado = False
 
     for num_pagina in range(paginas):
         url = build_url(num_pagina, checkin, checkout)
-        print(f"\n  [Página {num_pagina + 1}/{paginas}] {url}")
+        msg = f"Página {num_pagina + 1}/{paginas} — {checkin}"
+        print(f"\n  [{msg}] {url}")
+        if on_progress:
+            on_progress(msg, (num_pagina) / paginas)
 
         try:
             page.goto(url, timeout=SCRAPER_CONFIG["timeout"], wait_until="domcontentloaded")
@@ -229,7 +233,26 @@ def _scrape_paginas(page, checkin: str, checkout: str, paginas: int) -> list[dic
     return hoteis
 
 
-def scrape(checkin: str = None, checkout: str = None, paginas: int = None) -> list[dict]:
+def _criar_browser(p):
+    browser = p.chromium.launch(
+        headless=SCRAPER_CONFIG["headless"],
+        args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+    )
+    context = browser.new_context(
+        viewport={"width": 1366, "height": 768},
+        user_agent=(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        locale="pt-BR",
+    )
+    page = context.new_page()
+    page.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });")
+    return browser, page
+
+
+def scrape(checkin: str = None, checkout: str = None, paginas: int = None,
+           on_progress=None) -> list[dict]:
     """Busca simples: uma data ou período."""
     ci = checkin or CHECKIN
     co = checkout or CHECKOUT
@@ -238,56 +261,39 @@ def scrape(checkin: str = None, checkout: str = None, paginas: int = None) -> li
     print(f"\nBuscando {SEARCH_CONFIG['destino']} | {ci} → {co}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=SCRAPER_CONFIG["headless"],
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-        )
-        context = browser.new_context(
-            viewport={"width": 1366, "height": 768},
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            ),
-            locale="pt-BR",
-        )
-        page = context.new_page()
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });")
-
-        hoteis = _scrape_paginas(page, ci, co, total_paginas)
+        browser, page = _criar_browser(p)
+        hoteis = _scrape_paginas(page, ci, co, total_paginas, on_progress)
         browser.close()
 
     print(f"\nTotal coletado: {len(hoteis)} hotéis")
     return hoteis
 
 
-def scrape_rate_shopper(datas: list[str], paginas: int = None) -> list[dict]:
+def scrape_rate_shopper(datas: list[str], paginas: int = None,
+                        on_progress=None) -> list[dict]:
     """
     Rate Shopper: coleta preços para cada data individualmente (1 diária cada).
     Retorna lista com todos os hotéis de todas as datas.
     """
     total_paginas = paginas or SEARCH_CONFIG["paginas"]
+    total_passos  = len(datas) * total_paginas
+    passo_atual   = 0
     todos = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=SCRAPER_CONFIG["headless"],
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-        )
-        context = browser.new_context(
-            viewport={"width": 1366, "height": 768},
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            ),
-            locale="pt-BR",
-        )
-        page = context.new_page()
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });")
+        browser, page = _criar_browser(p)
 
         for data in datas:
             checkout = (datetime.strptime(data, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             print(f"\n{'='*60}\n[Data] {data}\n{'='*60}")
-            hoteis = _scrape_paginas(page, data, checkout, total_paginas)
+
+            def _prog(msg, _pct=None, _data=data, _passo=passo_atual):
+                nonlocal passo_atual
+                passo_atual += 1
+                if on_progress:
+                    on_progress(f"{_data} — {msg}", passo_atual / total_passos)
+
+            hoteis = _scrape_paginas(page, data, checkout, total_paginas, _prog)
             todos.extend(hoteis)
 
         browser.close()

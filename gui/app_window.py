@@ -1,7 +1,8 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 from datetime import datetime, timedelta
+import os
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -368,19 +369,80 @@ class AppWindow(ctk.CTk):
             ])
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Callbacks dos botões (serão conectados ao worker nas próximas fases)
+    # Callbacks dos botões
     # ─────────────────────────────────────────────────────────────────────────
     def _on_buscar(self):
-        # Fase 3: conectar ao worker thread
-        self.set_status("Em breve: worker thread será conectado aqui.")
+        erro = self._validar()
+        if erro:
+            messagebox.showerror("Campo inválido", erro)
+            return
+        self.set_buscando(True)
+        self.set_status("Iniciando...")
+        from gui.worker import ScraperWorker
+        ScraperWorker(self.obter_config(), self).start()
 
     def _on_export_excel(self):
-        # Fase 5: exportação
-        self.set_status("Em breve: exportar Excel.")
+        if not self._ultimo_resultado:
+            return
+        hoteis, modo = self._ultimo_resultado
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")],
+            initialfile="rate_shopper.xlsx",
+            initialdir=os.path.expanduser("~"),
+        )
+        if not caminho:
+            return
+        if modo == "rate_shopper":
+            from rate_shopper import montar_tabela, salvar_excel_rate_shopper
+            tabela, datas = montar_tabela(hoteis)
+            salvar_excel_rate_shopper(tabela, datas, caminho)
+        else:
+            from rate_shopper import montar_tabela, salvar_excel_rate_shopper
+            tabela, datas = montar_tabela(hoteis)
+            salvar_excel_rate_shopper(tabela, datas, caminho)
+        self.set_status(f"Excel salvo: {os.path.basename(caminho)}")
 
     def _on_export_csv(self):
-        # Fase 5: exportação
-        self.set_status("Em breve: exportar CSV.")
+        if not self._ultimo_resultado:
+            return
+        hoteis, modo = self._ultimo_resultado
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+            initialfile="rate_shopper.csv",
+            initialdir=os.path.expanduser("~"),
+        )
+        if not caminho:
+            return
+        if modo == "rate_shopper":
+            from rate_shopper import montar_tabela, salvar_csv_rate_shopper
+            tabela, datas = montar_tabela(hoteis)
+            salvar_csv_rate_shopper(tabela, datas, caminho)
+        else:
+            from relatorio import salvar_csv
+            salvar_csv(hoteis, caminho)
+        self.set_status(f"CSV salvo: {os.path.basename(caminho)}")
+
+    def _validar(self) -> str | None:
+        """Retorna mensagem de erro ou None se tudo ok."""
+        cfg = self.obter_config()
+        if not cfg["destino"]:
+            return "Preencha o destino."
+        for campo, label in [("adultos", "Adultos"), ("quartos", "Quartos"), ("paginas", "Páginas")]:
+            val = cfg[campo]
+            if val and (not val.isdigit() or int(val) < 1):
+                return f"{label} deve ser um número maior que zero."
+        try:
+            datetime.strptime(cfg["data_de"], "%d/%m/%Y")
+            datetime.strptime(cfg["data_ate"], "%d/%m/%Y")
+        except ValueError:
+            return "Datas inválidas. Use o formato dd/mm/aaaa."
+        de = datetime.strptime(cfg["data_de"], "%d/%m/%Y")
+        ate = datetime.strptime(cfg["data_ate"], "%d/%m/%Y")
+        if ate < de:
+            return "A data final não pode ser anterior à data inicial."
+        return None
 
     def obter_config(self) -> dict:
         """Retorna as configurações preenchidas pelo usuário."""
