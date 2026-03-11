@@ -23,7 +23,7 @@ LINK_COR   = "#1a56a0"
 class AppWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Rate Shopper — Booking.com")
+        self.title("Scrapper Hotéis")
         self.geometry("1200x760")
         self.minsize(960, 620)
         self.configure(fg_color=CINZA_BG)
@@ -49,7 +49,7 @@ class AppWindow(ctk.CTk):
         header.grid_propagate(False)
         header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            header, text="Rate Shopper — Booking.com",
+            header, text="Scrapper Hotéis",
             font=ctk.CTkFont(size=18, weight="bold"), text_color=BRANCO,
         ).grid(row=0, column=0, padx=20, pady=14, sticky="w")
 
@@ -68,7 +68,7 @@ class AppWindow(ctk.CTk):
                      ).grid(row=0, column=0, padx=(16,4), pady=(14,2), sticky="w")
         self.entry_destino = ctk.CTkEntry(panel, font=ef, width=220, placeholder_text="ex: Lisboa")
         self.entry_destino.grid(row=1, column=0, padx=(16,12), pady=(0,12), sticky="w")
-        self.entry_destino.insert(0, "Lisboa")
+        self.entry_destino.insert(0, "Belo Horizonte")
 
         ctk.CTkLabel(panel, text="Adultos", font=lf, text_color=SUBTEXTO
                      ).grid(row=0, column=1, padx=4, pady=(14,2), sticky="w")
@@ -116,24 +116,24 @@ class AppWindow(ctk.CTk):
         self._frame_rs = ctk.CTkFrame(self.datas_frame, fg_color="transparent")
         ctk.CTkLabel(self._frame_rs, text="De", font=lf, text_color=SUBTEXTO
                      ).grid(row=0, column=0, padx=(0,4), sticky="w")
-        ctk.CTkEntry(self._frame_rs, font=ef, width=ew, textvariable=self._data_inicio_str
-                     ).grid(row=0, column=1, padx=(0,16))
+        self.entry_data_de = ctk.CTkEntry(self._frame_rs, font=ef, width=ew, textvariable=self._data_inicio_str)
+        self.entry_data_de.grid(row=0, column=1, padx=(0,16))
         ctk.CTkLabel(self._frame_rs, text="Até", font=lf, text_color=SUBTEXTO
                      ).grid(row=0, column=2, padx=(0,4), sticky="w")
-        ctk.CTkEntry(self._frame_rs, font=ef, width=ew, textvariable=self._data_fim_str
-                     ).grid(row=0, column=3, padx=(0,16))
+        self.entry_data_ate = ctk.CTkEntry(self._frame_rs, font=ef, width=ew, textvariable=self._data_fim_str)
+        self.entry_data_ate.grid(row=0, column=3, padx=(0,16))
         ctk.CTkLabel(self._frame_rs, text="(uma diária por dia)",
                      font=ctk.CTkFont(size=11), text_color=SUBTEXTO).grid(row=0, column=4)
 
         self._frame_simples = ctk.CTkFrame(self.datas_frame, fg_color="transparent")
         ctk.CTkLabel(self._frame_simples, text="Check-in", font=lf, text_color=SUBTEXTO
                      ).grid(row=0, column=0, padx=(0,4), sticky="w")
-        ctk.CTkEntry(self._frame_simples, font=ef, width=ew, textvariable=self._data_inicio_str
-                     ).grid(row=0, column=1, padx=(0,16))
+        self.entry_checkin = ctk.CTkEntry(self._frame_simples, font=ef, width=ew, textvariable=self._data_inicio_str)
+        self.entry_checkin.grid(row=0, column=1, padx=(0,16))
         ctk.CTkLabel(self._frame_simples, text="Check-out", font=lf, text_color=SUBTEXTO
                      ).grid(row=0, column=2, padx=(0,4), sticky="w")
-        ctk.CTkEntry(self._frame_simples, font=ef, width=ew, textvariable=self._data_fim_str
-                     ).grid(row=0, column=3)
+        self.entry_checkout = ctk.CTkEntry(self._frame_simples, font=ef, width=ew, textvariable=self._data_fim_str)
+        self.entry_checkout.grid(row=0, column=3)
 
         self._on_modo_change()
 
@@ -167,7 +167,14 @@ class AppWindow(ctk.CTk):
             fg_color="#6b7280", hover_color="#4b5563",
             font=ctk.CTkFont(size=13), state="disabled", command=self._on_export_csv,
         )
-        self.btn_export_csv.pack(side="left")
+        self.btn_export_csv.pack(side="left", padx=(0, 20))
+
+        self.var_logs = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            btn_frame, text="Salvar logs", variable=self.var_logs,
+            font=ctk.CTkFont(size=12), text_color=SUBTEXTO,
+            checkbox_width=18, checkbox_height=18,
+        ).pack(side="left")
 
     # ── Painel de resultados com abas ─────────────────────────────────────────
     def _build_results_panel(self):
@@ -223,10 +230,10 @@ class AppWindow(ctk.CTk):
         self._mostrar_estado_vazio(self.tree_rate,   "Aba 2: Rate Shopper completo (todas as datas)")
 
         # Dica de link no rodapé da aba
-        ctk.CTkLabel(self._aba_precos, text="Dica: clique duplo em um hotel para abrir no Booking.com",
+        ctk.CTkLabel(self._aba_precos, text="Dica: clique duplo em um hotel para abrir no site",
                      font=ctk.CTkFont(size=11), text_color=SUBTEXTO,
                      ).pack(side="bottom", pady=(0, 6))
-        ctk.CTkLabel(self._aba_rate, text="Dica: clique duplo em um hotel para abrir no Booking.com",
+        ctk.CTkLabel(self._aba_rate, text="Dica: clique duplo em um hotel para abrir no site",
                      font=ctk.CTkFont(size=11), text_color=SUBTEXTO,
                      ).pack(side="bottom", pady=(0, 6))
 
@@ -270,6 +277,10 @@ class AppWindow(ctk.CTk):
         self.progress.set(0)
         self.progress.grid_remove()
 
+        ctk.CTkLabel(bar, text="Desenvolvido por MATTecnologia — Marcelo Teixeira",
+                     font=ctk.CTkFont(size=10), text_color="#9ca3af",
+                     ).grid(row=0, column=2, padx=16, pady=10, sticky="e")
+
     # ─────────────────────────────────────────────────────────────────────────
     # Helpers
     # ─────────────────────────────────────────────────────────────────────────
@@ -289,6 +300,44 @@ class AppWindow(ctk.CTk):
             tree.delete(item)
         tree.insert("", "end", values=(msg or "Faça uma busca para ver os resultados.",))
 
+    def mostrar_erro(self, titulo: str, mensagem: str):
+        """Exibe um modal de erro com título e mensagem detalhada."""
+        def _u():
+            win = ctk.CTkToplevel(self)
+            win.title(titulo)
+            win.geometry("540x300")
+            win.resizable(False, False)
+            win.grab_set()
+            win.configure(fg_color=BRANCO)
+            win.grid_rowconfigure(1, weight=1)
+            win.grid_columnconfigure(0, weight=1)
+
+            # Cabeçalho vermelho
+            hdr = ctk.CTkFrame(win, fg_color=VERMELHO, corner_radius=0, height=48)
+            hdr.grid(row=0, column=0, sticky="ew")
+            hdr.grid_propagate(False)
+            ctk.CTkLabel(hdr, text=f"  ⚠  {titulo}",
+                         font=ctk.CTkFont(size=14, weight="bold"),
+                         text_color=BRANCO).pack(side="left", padx=16, pady=12)
+
+            # Área de texto com a mensagem
+            txt = tk.Text(win, wrap="word", font=("Courier", 10),
+                          bg="#fef2f2", fg="#7f1d1d", relief="flat",
+                          borderwidth=0, padx=12, pady=12)
+            txt.grid(row=1, column=0, sticky="nsew", padx=12, pady=(12, 0))
+            txt.insert("1.0", mensagem)
+            txt.configure(state="disabled")
+
+            sb = ttk.Scrollbar(win, command=txt.yview)
+            sb.grid(row=1, column=1, sticky="ns", pady=(12, 0))
+            txt.configure(yscrollcommand=sb.set)
+
+            ctk.CTkButton(win, text="Fechar", width=100, height=34,
+                          fg_color=VERMELHO, hover_color=VERM_HOVER,
+                          command=win.destroy).grid(row=2, column=0, columnspan=2,
+                                                    pady=12)
+        self.after(0, _u)
+
     def set_status(self, texto: str, progresso: float = None):
         def _u():
             self.lbl_status.configure(text=texto)
@@ -299,8 +348,22 @@ class AppWindow(ctk.CTk):
                 self.progress.grid_remove()
         self.after(0, _u)
 
+    def _campos_config(self):
+        """Retorna todos os widgets de entrada do painel de configuração."""
+        return [
+            self.entry_destino, self.entry_adultos, self.entry_quartos,
+            self.entry_paginas, self.entry_data_de, self.entry_data_ate,
+            self.entry_checkin, self.entry_checkout,
+        ]
+
     def set_buscando(self, ativo: bool):
+        estado_campos = "disabled" if ativo else "normal"
         def _u():
+            for w in self._campos_config():
+                try:
+                    w.configure(state=estado_campos)
+                except Exception:
+                    pass
             if ativo:
                 self.btn_buscar.configure(state="disabled", text="⏳ Buscando...")
                 self.btn_parar.configure(state="normal")
@@ -311,7 +374,7 @@ class AppWindow(ctk.CTk):
                 self.progress.start()
             else:
                 self.btn_buscar.configure(state="normal", text="▶  Buscar")
-                self.btn_parar.configure(state="disabled")
+                self.btn_parar.configure(state="disabled", text="⏹  Parar")
                 self.progress.stop()
                 self.progress.configure(mode="determinate")
                 self.progress.set(1)
@@ -398,6 +461,8 @@ class AppWindow(ctk.CTk):
             for h in sorted(hoteis, key=lambda x: x.get("preco_com_desconto") or 0):
                 _inserir(h)
 
+        self._configurar_ordenacao(tree)
+
     def _popular_aba_rate(self, hoteis: list[dict]):
         """Aba 2 — Rate Shopper: hotel × data, preço por coluna."""
         tree = self.tree_rate
@@ -444,6 +509,55 @@ class AppWindow(ctk.CTk):
             iid  = tree.insert("", "end", values=row, tags=tags)
             if link:
                 self._links_rate[iid] = link
+
+        self._configurar_ordenacao(tree)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Ordenação de colunas
+    # ─────────────────────────────────────────────────────────────────────────
+    def _configurar_ordenacao(self, tree: ttk.Treeview):
+        """Associa clique no cabeçalho de cada coluna para ordenar a treeview."""
+        # Estado de ordenação: col_id → True=asc, False=desc
+        _ordem = {}
+
+        def _ordenar(col):
+            reverso = _ordem.get(col, False)
+            _ordem[col] = not reverso
+
+            rows = [(tree.set(iid, col), iid) for iid in tree.get_children("")]
+
+            def _chave(t):
+                v = t[0]
+                # Tenta converter número para ordenação numérica
+                for fmt in (
+                    lambda x: float(x.replace("R$", "").replace(".", "").replace(",", ".").replace("%", "").strip()),
+                    float,
+                ):
+                    try:
+                        return (0, fmt(v))
+                    except Exception:
+                        pass
+                # "-" vai para o final independente de direção
+                if v == "-" or v == "":
+                    return (1, v)
+                return (0, v)
+
+            rows.sort(key=_chave, reverse=reverso)
+
+            for idx, (_, iid) in enumerate(rows):
+                tree.move(iid, "", idx)
+
+            # Indicadores visuais nas colunas
+            for c in tree["columns"]:
+                txt = tree.heading(c)["text"]
+                # Remove indicador anterior
+                txt = txt.replace(" ▲", "").replace(" ▼", "")
+                if c == col:
+                    txt += " ▲" if not reverso else " ▼"
+                tree.heading(c, text=txt)
+
+        for col in tree["columns"]:
+            tree.heading(col, command=lambda c=col: _ordenar(c))
 
     # ─────────────────────────────────────────────────────────────────────────
     # Link: abrir no browser + cursor

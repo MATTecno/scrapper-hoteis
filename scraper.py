@@ -44,23 +44,26 @@ def extrair_hotel(card) -> dict | None:
         preco_texto = None
         preco_original_texto = None
 
-        # Busca a div de acessibilidade pelo conteúdo de texto (independente de classe)
-        texto_acessibilidade = card.evaluate("""el => {
-            for (const div of el.querySelectorAll('div')) {
-                const t = div.innerText || '';
-                if (t.includes('Preço atual') || t.includes('Preço original')) return t;
-            }
-            return null;
-        }""")
+        # Busca o wrapper de preço pelo data-testid
+        wrapper_el = card.query_selector('[data-testid="availability-rate-wrapper"]')
+        texto_acessibilidade = wrapper_el.inner_text() if wrapper_el else None
+
         if texto_acessibilidade:
-            match_atual = re.search(r"Preço atual[:\s]+R\$[\s\xa0]*([\d.,]+)", texto_acessibilidade)
+            # Caso com desconto: "Preço original: R$ 239. Preço atual: R$ 203."
+            match_atual    = re.search(r"Preço atual[:\s]+R\$[\s\xa0]*([\d.,]+)", texto_acessibilidade)
             match_original = re.search(r"Preço original[:\s]+R\$[\s\xa0]*([\d.,]+)", texto_acessibilidade)
             if match_atual:
                 preco_texto = "R$ " + match_atual.group(1)
             if match_original:
                 preco_original_texto = "R$ " + match_original.group(1)
 
-        # fallback: elementos visuais com data-testid
+            # Caso sem desconto: "Preço: R$ 225"
+            if not preco_texto:
+                match_preco = re.search(r"Preço[:\s]+R\$[\s\xa0]*([\d.,]+)", texto_acessibilidade)
+                if match_preco:
+                    preco_texto = "R$ " + match_preco.group(1)
+
+        # fallback: elemento visual com data-testid
         if not preco_texto:
             preco_el = card.query_selector('[data-testid="price-and-discounted-price"]')
             preco_texto = preco_el.inner_text().strip() if preco_el else None
@@ -235,11 +238,18 @@ def _scrape_paginas(page, checkin: str, checkout: str, paginas: int,
     return hoteis
 
 
+def _configurar_playwright_bundle():
+    """No bundle PyInstaller, o hook_playwright_fix.py já configura o ambiente.
+    Esta função existe apenas para chamar explicitamente antes do sync_playwright()."""
+    pass
+
+
 def _criar_browser(p):
-    browser = p.chromium.launch(
+    kwargs = dict(
         headless=SCRAPER_CONFIG["headless"],
         args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
     )
+    browser = p.chromium.launch(**kwargs)
     context = browser.new_context(
         viewport={"width": 1366, "height": 768},
         user_agent=(
@@ -256,6 +266,8 @@ def _criar_browser(p):
 def scrape(checkin: str = None, checkout: str = None, paginas: int = None,
            on_progress=None, parar=None) -> list[dict]:
     """Busca simples: uma data ou período."""
+    _configurar_playwright_bundle()
+
     ci = checkin or CHECKIN
     co = checkout or CHECKOUT
     total_paginas = paginas or SEARCH_CONFIG["paginas"]
@@ -277,6 +289,7 @@ def scrape_rate_shopper(datas: list[str], paginas: int = None,
     Rate Shopper: coleta preços para cada data individualmente (1 diária cada).
     Retorna lista com todos os hotéis de todas as datas.
     """
+    _configurar_playwright_bundle()
     total_paginas = paginas or SEARCH_CONFIG["paginas"]
     total_passos  = len(datas) * total_paginas
     passo_atual   = 0
