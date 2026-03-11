@@ -6,6 +6,10 @@ on:
       - "v*"          # dispara em tags como v1.0.0, v1.2.3
   workflow_dispatch:  # permite rodar manualmente pela UI do GitHub
 
+# Permissão explícita para criar Releases
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -26,6 +30,7 @@ jobs:
 
       - name: Instalar Chromium do Playwright
         run: playwright install chromium
+        continue-on-error: true  # falha de CDN não interrompe o build
 
       - name: Build com PyInstaller
         run: pyinstaller scrapper_hoteis_win.spec --clean
