@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 from datetime import datetime, timedelta
 import os
+import threading
 import webbrowser
 
 ctk.set_appearance_mode("light")
@@ -32,6 +33,8 @@ class AppWindow(ctk.CTk):
         # links armazenados por item_id da tree
         self._links_por_item = {}
         self._build_ui()
+        # Verifica setup (Chromium) e atualizações após a janela estar visível
+        self.after(200, self._verificar_setup_inicial)
 
     # ─────────────────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -52,6 +55,20 @@ class AppWindow(ctk.CTk):
             header, text="Scrapper Hotéis",
             font=ctk.CTkFont(size=18, weight="bold"), text_color=BRANCO,
         ).grid(row=0, column=0, padx=20, pady=14, sticky="w")
+
+        # Botão de engrenagem (Sobre / Atualizar) à direita do header
+        ctk.CTkButton(
+            header,
+            text="⚙",
+            width=38,
+            height=38,
+            fg_color="transparent",
+            hover_color=AZUL_HOVER,
+            font=ctk.CTkFont(size=18),
+            text_color=BRANCO,
+            corner_radius=6,
+            command=self._on_verificar_atualizacao,
+        ).grid(row=0, column=1, padx=(0, 12), pady=9, sticky="e")
 
     # ── Painel de configuração ────────────────────────────────────────────────
     def _build_config_panel(self):
@@ -659,3 +676,290 @@ class AppWindow(ctk.CTk):
             "data_de":  self._data_inicio_str.get().strip(),
             "data_ate": self._data_fim_str.get().strip(),
         }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Setup inicial (Chromium)
+    # ─────────────────────────────────────────────────────────────────────────
+    def _verificar_setup_inicial(self):
+        """Chamado após a janela principal ser exibida. Abre a tela de setup se necessário."""
+        from gui.setup_screen import verificar_setup
+        verificar_setup(self)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Atualização automática
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_verificar_atualizacao(self):
+        """Abre o modal 'Sobre / Atualizar', verificando novas versões em background."""
+        # Janela modal imediata com estado "verificando..."
+        modal = _ModalAtualizacao(self)
+        # Inicia verificação em thread
+        t = threading.Thread(target=self._checar_atualizacao_thread, args=(modal,), daemon=True)
+        t.start()
+
+    def _checar_atualizacao_thread(self, modal: "ctk.CTkToplevel"):
+        try:
+            from updater import verificar_atualizacao, CURRENT_VERSION
+            release = verificar_atualizacao()
+            self.after(0, lambda: modal.on_resultado(release, CURRENT_VERSION))
+        except Exception as exc:
+            self.after(0, lambda e=str(exc): modal.on_erro(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Modal de atualização (standalone para facilitar testes)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _ModalAtualizacao(ctk.CTkToplevel):
+    """Modal 'Sobre / Atualizar'."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Sobre / Atualizar")
+        self.geometry("560x440")
+        self.minsize(480, 360)
+        self.resizable(True, True)
+        self.configure(fg_color=BRANCO)
+        self.grab_set()
+        self.transient(parent)
+        self._download_url = None
+        self._build_ui()
+
+        # Centraliza
+        self.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width()  - self.winfo_width())  // 2
+        py = parent.winfo_rooty() + (parent.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{px}+{py}")
+
+    # ── Layout ────────────────────────────────────────────────────────────────
+
+    def _build_ui(self):
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # Cabeçalho
+        hdr = ctk.CTkFrame(self, fg_color=AZUL, corner_radius=0, height=52)
+        hdr.grid(row=0, column=0, sticky="ew")
+        hdr.grid_propagate(False)
+        ctk.CTkLabel(
+            hdr,
+            text="  ⚙  Sobre / Atualizar",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=BRANCO,
+        ).pack(side="left", padx=16, pady=12)
+
+        # Corpo
+        corpo = ctk.CTkFrame(self, fg_color=BRANCO, corner_radius=0)
+        corpo.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        corpo.grid_rowconfigure(2, weight=1)
+        corpo.grid_columnconfigure(0, weight=1)
+
+        # Versão atual
+        try:
+            from version import VERSION
+            ver_atual = VERSION
+        except ImportError:
+            from updater import CURRENT_VERSION
+            ver_atual = CURRENT_VERSION
+
+        self._lbl_versao_atual = ctk.CTkLabel(
+            corpo,
+            text=f"Versão instalada: {ver_atual}",
+            font=ctk.CTkFont(size=13),
+            text_color=TEXTO,
+        )
+        self._lbl_versao_atual.grid(row=0, column=0, padx=20, pady=(16, 2), sticky="w")
+
+        self._lbl_status = ctk.CTkLabel(
+            corpo,
+            text="Verificando atualizações...",
+            font=ctk.CTkFont(size=13),
+            text_color=SUBTEXTO,
+        )
+        self._lbl_status.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="w")
+
+        # Área de release notes
+        notas_frame = tk.Frame(corpo, bg="#f9fafb")
+        notas_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=(0, 8))
+        notas_frame.grid_rowconfigure(0, weight=1)
+        notas_frame.grid_columnconfigure(0, weight=1)
+
+        self._txt_notas = tk.Text(
+            notas_frame,
+            wrap="word",
+            font=("Segoe UI", 10),
+            bg="#f9fafb",
+            fg=TEXTO,
+            relief="flat",
+            borderwidth=0,
+            padx=8,
+            pady=8,
+            state="disabled",
+        )
+        self._txt_notas.grid(row=0, column=0, sticky="nsew")
+        vsb = tk.Scrollbar(notas_frame, command=self._txt_notas.yview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        self._txt_notas.configure(yscrollcommand=vsb.set)
+
+        # Barra de progresso (oculta por padrão)
+        self._progress = ctk.CTkProgressBar(corpo, height=8)
+        self._progress.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 4))
+        self._progress.set(0)
+        self._progress.grid_remove()
+
+        self._lbl_progresso = ctk.CTkLabel(
+            corpo, text="", font=ctk.CTkFont(size=11), text_color=SUBTEXTO,
+        )
+        self._lbl_progresso.grid(row=4, column=0, padx=20, pady=(0, 4), sticky="w")
+        self._lbl_progresso.grid_remove()
+
+        # Rodapé
+        rodape = ctk.CTkFrame(corpo, fg_color="transparent")
+        rodape.grid(row=5, column=0, padx=20, pady=(0, 16), sticky="e")
+
+        self._btn_baixar = ctk.CTkButton(
+            rodape,
+            text="Baixar atualização",
+            width=170,
+            height=36,
+            fg_color=AZUL,
+            hover_color=AZUL_HOVER,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            state="disabled",
+            command=self._iniciar_download,
+        )
+        self._btn_baixar.pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            rodape,
+            text="Fechar",
+            width=100,
+            height=36,
+            fg_color="#6b7280",
+            hover_color="#4b5563",
+            font=ctk.CTkFont(size=13),
+            command=self.destroy,
+        ).pack(side="left")
+
+    # ── Callbacks de verificação ──────────────────────────────────────────────
+
+    def on_resultado(self, release: dict | None, versao_atual: str):
+        """Chamado na thread principal com o resultado da verificação."""
+        if release is None:
+            self._lbl_status.configure(
+                text="Voce ja tem a versao mais recente.",
+                text_color=VERDE,
+            )
+            self._set_notas("Nenhuma atualizacao disponivel no momento.")
+        else:
+            tag    = release.get("tag_name", "?")
+            notas  = release.get("body") or "Sem notas de versao."
+            self._lbl_status.configure(
+                text=f"Nova versao disponivel: {tag}",
+                text_color=AZUL,
+            )
+            self._set_notas(notas)
+
+            # Descobre URL de download do primeiro asset .exe ou qualquer asset
+            assets = release.get("assets", [])
+            url = None
+            for asset in assets:
+                nome = asset.get("name", "")
+                if nome.endswith(".exe") or nome.endswith(".zip") or nome.endswith(".tar.gz"):
+                    url = asset.get("browser_download_url")
+                    break
+            if not url and assets:
+                url = assets[0].get("browser_download_url")
+            if not url:
+                url = release.get("html_url")  # fallback: página da release
+
+            self._download_url = url
+            if url:
+                self._btn_baixar.configure(state="normal")
+
+    def on_erro(self, mensagem: str):
+        """Chamado se a verificação falhar."""
+        self._lbl_status.configure(
+            text=f"Erro ao verificar: {mensagem}",
+            text_color=VERMELHO,
+        )
+        self._set_notas("")
+
+    def _set_notas(self, texto: str):
+        self._txt_notas.configure(state="normal")
+        self._txt_notas.delete("1.0", "end")
+        self._txt_notas.insert("1.0", texto)
+        self._txt_notas.configure(state="disabled")
+
+    # ── Download ──────────────────────────────────────────────────────────────
+
+    def _iniciar_download(self):
+        if not self._download_url:
+            return
+        self._btn_baixar.configure(state="disabled", text="Baixando...")
+        self._progress.grid()
+        self._progress.set(0)
+        self._lbl_progresso.grid()
+        self._lbl_progresso.configure(text="Iniciando download...")
+
+        t = threading.Thread(target=self._download_thread, daemon=True)
+        t.start()
+
+    def _download_thread(self):
+        import sys as _sys
+        try:
+            from updater import baixar_e_instalar
+
+            def _on_progress(baixados: int, total: int):
+                if total > 0:
+                    pct = baixados / total
+                    kb  = baixados // 1024
+                    tot_kb = total // 1024
+                    self.after(0, lambda p=pct, k=kb, t=tot_kb: self._atualizar_progresso(p, k, t))
+                else:
+                    kb = baixados // 1024
+                    self.after(0, lambda k=kb: self._lbl_progresso.configure(text=f"{k} KB baixados..."))
+
+            caminho = baixar_e_instalar(self._download_url, on_progress=_on_progress)
+            self.after(0, lambda c=caminho: self._on_download_concluido(c))
+
+        except Exception as exc:
+            self.after(0, lambda e=str(exc): self._on_download_erro(e))
+
+    def _atualizar_progresso(self, pct: float, baixados_kb: int, total_kb: int):
+        self._progress.set(pct)
+        self._lbl_progresso.configure(
+            text=f"{baixados_kb} KB / {total_kb} KB  ({pct*100:.0f}%)"
+        )
+
+    def _on_download_concluido(self, caminho: str):
+        import sys as _sys
+        self._progress.set(1)
+        self._btn_baixar.configure(
+            fg_color=VERDE,
+            hover_color="#246e3e",
+            text="Download concluido",
+        )
+
+        if _sys.platform == "win32":
+            msg = (
+                "Download concluido!\n\n"
+                "Feche o app e execute o arquivo baixado para atualizar:\n"
+                f"{caminho}"
+            )
+        else:
+            msg = f"Novo executavel salvo em:\n{caminho}"
+
+        self._set_notas(msg)
+        self._lbl_progresso.configure(text="Concluido.", text_color=VERDE)
+
+    def _on_download_erro(self, mensagem: str):
+        self._progress.grid_remove()
+        self._lbl_progresso.configure(
+            text=f"Erro: {mensagem}", text_color=VERMELHO
+        )
+        self._btn_baixar.configure(
+            state="normal",
+            text="Tentar novamente",
+            fg_color=VERMELHO,
+            hover_color=VERM_HOVER,
+        )
