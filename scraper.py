@@ -176,12 +176,14 @@ def calcular_economia(preco_original: str | None, preco_final: str | None) -> fl
 
 
 def _scrape_paginas(page, checkin: str, checkout: str, paginas: int,
-                    on_progress=None) -> list[dict]:
+                    on_progress=None, parar=None) -> list[dict]:
     """Coleta hotéis de múltiplas páginas para um par checkin/checkout."""
     hoteis = []
     cookie_fechado = False
 
     for num_pagina in range(paginas):
+        if parar and parar.is_set():
+            break
         url = build_url(num_pagina, checkin, checkout)
         msg = f"Página {num_pagina + 1}/{paginas} — {checkin}"
         print(f"\n  [{msg}] {url}")
@@ -252,7 +254,7 @@ def _criar_browser(p):
 
 
 def scrape(checkin: str = None, checkout: str = None, paginas: int = None,
-           on_progress=None) -> list[dict]:
+           on_progress=None, parar=None) -> list[dict]:
     """Busca simples: uma data ou período."""
     ci = checkin or CHECKIN
     co = checkout or CHECKOUT
@@ -262,7 +264,7 @@ def scrape(checkin: str = None, checkout: str = None, paginas: int = None,
 
     with sync_playwright() as p:
         browser, page = _criar_browser(p)
-        hoteis = _scrape_paginas(page, ci, co, total_paginas, on_progress)
+        hoteis = _scrape_paginas(page, ci, co, total_paginas, on_progress, parar)
         browser.close()
 
     print(f"\nTotal coletado: {len(hoteis)} hotéis")
@@ -270,7 +272,7 @@ def scrape(checkin: str = None, checkout: str = None, paginas: int = None,
 
 
 def scrape_rate_shopper(datas: list[str], paginas: int = None,
-                        on_progress=None) -> list[dict]:
+                        on_progress=None, parar=None) -> list[dict]:
     """
     Rate Shopper: coleta preços para cada data individualmente (1 diária cada).
     Retorna lista com todos os hotéis de todas as datas.
@@ -284,6 +286,8 @@ def scrape_rate_shopper(datas: list[str], paginas: int = None,
         browser, page = _criar_browser(p)
 
         for data in datas:
+            if parar and parar.is_set():
+                break
             checkout = (datetime.strptime(data, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             print(f"\n{'='*60}\n[Data] {data}\n{'='*60}")
 
@@ -293,7 +297,7 @@ def scrape_rate_shopper(datas: list[str], paginas: int = None,
                 if on_progress:
                     on_progress(f"{_data} — {msg}", passo_atual / total_passos)
 
-            hoteis = _scrape_paginas(page, data, checkout, total_paginas, _prog)
+            hoteis = _scrape_paginas(page, data, checkout, total_paginas, _prog, parar)
             todos.extend(hoteis)
 
         browser.close()

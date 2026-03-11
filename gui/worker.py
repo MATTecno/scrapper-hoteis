@@ -9,9 +9,16 @@ from datetime import datetime, timedelta
 class ScraperWorker(threading.Thread):
     def __init__(self, config: dict, app):
         super().__init__(daemon=True)
-        self._config = config
-        self._app    = app          # referência à AppWindow
-        self._parar  = False
+        self._config  = config
+        self._app     = app
+        self._parar   = threading.Event()   # sinaliza cancelamento
+
+    def parar(self):
+        self._parar.set()
+
+    @property
+    def cancelado(self):
+        return self._parar.is_set()
 
     # ─────────────────────────────────────────────────────────────────────────
     def run(self):
@@ -28,6 +35,7 @@ class ScraperWorker(threading.Thread):
                     datas,
                     paginas=int(cfg["paginas"]),
                     on_progress=self._on_progress,
+                    parar=self._parar,
                 )
             else:
                 ci = self._para_iso(cfg["data_de"])
@@ -39,11 +47,17 @@ class ScraperWorker(threading.Thread):
                     checkout=co,
                     paginas=int(cfg["paginas"]),
                     on_progress=self._on_progress,
+                    parar=self._parar,
                 )
 
-            self._app.after(0, lambda: self._app.mostrar_resultados(hoteis, modo))
+            if self.cancelado:
+                self._status(f"Busca interrompida — {len(hoteis)} hotéis coletados até agora.")
+            else:
+                self._status(f"Concluído — {len(hoteis)} hotéis encontrados.")
+
+            if hoteis:
+                self._app.after(0, lambda: self._app.mostrar_resultados(hoteis, modo))
             self._app.after(0, lambda: self._app.set_buscando(False))
-            self._status(f"Concluído — {len(hoteis)} hotéis encontrados.")
 
         except Exception as e:
             self._status(f"Erro: {e}")
@@ -51,7 +65,6 @@ class ScraperWorker(threading.Thread):
 
     # ─────────────────────────────────────────────────────────────────────────
     def _on_progress(self, msg: str, pct: float = None):
-        """Callback chamado pelo scraper a cada página coletada."""
         self._status(msg, pct)
 
     def _status(self, texto: str, pct: float = None):
@@ -63,19 +76,17 @@ class ScraperWorker(threading.Thread):
         SEARCH_CONFIG["destino"] = cfg["destino"]
         SEARCH_CONFIG["adultos"] = int(cfg["adultos"]) if cfg["adultos"] else None
         SEARCH_CONFIG["quartos"] = int(cfg["quartos"]) if cfg["quartos"] else None
-        SCRAPER_CONFIG["headless"] = True  # sempre headless na GUI
+        SCRAPER_CONFIG["headless"] = True
 
     @staticmethod
     def _para_iso(data_br: str) -> str:
-        """Converte dd/mm/yyyy → yyyy-mm-dd."""
         return datetime.strptime(data_br.strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
 
     @staticmethod
     def _gerar_datas(de_br: str, ate_br: str) -> list[str]:
         inicio = datetime.strptime(de_br.strip(), "%d/%m/%Y")
         fim    = datetime.strptime(ate_br.strip(), "%d/%m/%Y")
-        datas  = []
-        atual  = inicio
+        datas, atual = [], inicio
         while atual <= fim:
             datas.append(atual.strftime("%Y-%m-%d"))
             atual += timedelta(days=1)
