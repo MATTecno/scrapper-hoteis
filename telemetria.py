@@ -11,6 +11,12 @@ from urllib import request, error
 _SUPABASE_URL = "https://rxhxtnvjnzpdvvmctkmw.supabase.co"
 _ANON_KEY = "%%SUPABASE_ANON_KEY%%"  # substituído pelo CI no build
 
+# Permite sobrescrever localmente via variável de ambiente (nunca commitar o valor)
+import os as _os
+_env_key = _os.environ.get("SUPABASE_ANON_KEY")
+if _env_key:
+    _ANON_KEY = _env_key
+
 # UUID gerado em memória a cada abertura — nunca salvo em disco
 _session_id = str(uuid.uuid4())
 
