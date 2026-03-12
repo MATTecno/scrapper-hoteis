@@ -9,11 +9,7 @@ import uuid
 from urllib import request, error
 
 _SUPABASE_URL = "https://rxhxtnvjnzpdvvmctkmw.supabase.co"
-_ANON_KEY = (
-    "SUPABASE_ANON_KEY_PLACEHOLDER"
-    ".SUPABASE_ANON_KEY_PLACEHOLDER"
-    ".JMqTXE5FGL6QS1gAh5b0fKm--UwWlU1LNSHtpTBuOck"
-)
+_ANON_KEY = "%%SUPABASE_ANON_KEY%%"  # substituído pelo CI no build
 
 # UUID gerado em memória a cada abertura — nunca salvo em disco
 _session_id = str(uuid.uuid4())

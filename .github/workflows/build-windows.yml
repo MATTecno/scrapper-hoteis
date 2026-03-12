@@ -32,6 +32,11 @@ jobs:
         run: playwright install chromium
         continue-on-error: true  # falha de CDN não interrompe o build
 
+      - name: Injetar chave Supabase
+        run: |
+          (Get-Content telemetria.py) -replace '%%SUPABASE_ANON_KEY%%', '${{ secrets.SUPABASE_ANON_KEY }}' | Set-Content telemetria.py
+        shell: pwsh
+
       - name: Build com PyInstaller
         run: pyinstaller scrapper_hoteis_win.spec --clean
 
