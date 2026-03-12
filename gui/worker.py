@@ -89,6 +89,12 @@ class ScraperWorker(threading.Thread):
             else:
                 self._status(f"Concluído — {len(hoteis)} hotéis encontrados.")
 
+            try:
+                import telemetria
+                telemetria.registrar("busca_executada", modo=modo, hoteis_n=len(hoteis))
+            except Exception:
+                pass
+
             if hoteis:
                 self._app.after(0, lambda: self._app.mostrar_resultados(hoteis, modo))
             self._app.after(0, lambda: self._app.set_buscando(False))

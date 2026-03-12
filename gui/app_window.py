@@ -37,6 +37,8 @@ class AppWindow(ctk.CTk):
         self.after(200, self._verificar_setup_inicial)
         # Verifica atualizações silenciosamente após 3 s
         self.after(3000, self._verificar_atualizacao_silenciosa)
+        # Telemetria de startup
+        self.after(1000, lambda: __import__("telemetria").registrar("app_start"))
 
     # ─────────────────────────────────────────────────────────────────────────
     def _build_ui(self):

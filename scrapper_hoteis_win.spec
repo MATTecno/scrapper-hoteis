@@ -47,6 +47,7 @@ a = Analysis(
         "version",
         "updater",
         "autostart",
+        "telemetria",
     ],
     hookspath=[],
     hooksconfig={},
