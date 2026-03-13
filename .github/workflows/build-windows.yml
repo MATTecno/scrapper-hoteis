@@ -1,17 +1,16 @@
-name: Build Windows EXE
+name: Build EXE (Windows + Linux)
 
 on:
   push:
     tags:
-      - "v*"          # dispara em tags como v1.0.0, v1.2.3
-  workflow_dispatch:  # permite rodar manualmente pela UI do GitHub
+      - "v*"
+  workflow_dispatch:
 
-# Permissão explícita para criar Releases
 permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -30,7 +29,7 @@ jobs:
 
       - name: Instalar Chromium do Playwright
         run: playwright install chromium
-        continue-on-error: true  # falha de CDN não interrompe o build
+        continue-on-error: true
 
       - name: Injetar chave Supabase
         run: |
@@ -40,30 +39,106 @@ jobs:
       - name: Build com PyInstaller
         run: pyinstaller scrapper_hoteis_win.spec --clean
 
-      - name: Verificar executável gerado
-        run: dir dist\
-
       - name: Upload do EXE como artefato
         uses: actions/upload-artifact@v4
         with:
           name: ScrapperHoteis-Windows
-          path: dist\ScrapperHoteis.exe
+          path: dist/ScrapperHoteis.exe
           retention-days: 30
 
-      # Se for uma tag, cria uma Release no GitHub automaticamente
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-tk \
+            libglib2.0-0 \
+            libgtk-3-0 \
+            libayatana-appindicator3-1 \
+            gir1.2-ayatanaappindicator3-0.1 \
+            upx-ucl
+
+      - name: Instalar dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.44.0 customtkinter>=5.2.0 openpyxl>=3.1.0 pystray>=0.19.0 pillow>=10.0.0 pyinstaller
+
+      - name: Instalar Chromium do Playwright
+        run: playwright install chromium
+        continue-on-error: true
+
+      - name: Injetar chave Supabase
+        run: |
+          sed -i "s/%%SUPABASE_ANON_KEY%%/${{ secrets.SUPABASE_ANON_KEY }}/g" telemetria.py
+
+      - name: Build com PyInstaller
+        run: pyinstaller scrapper_hoteis.spec --clean
+
+      - name: Upload do binário como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScrapperHoteis-Linux
+          path: dist/ScrapperHoteis
+          retention-days: 30
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Baixar artefato Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: ScrapperHoteis-Windows
+          path: artifacts/windows
+
+      - name: Baixar artefato Linux
+        uses: actions/download-artifact@v4
+        with:
+          name: ScrapperHoteis-Linux
+          path: artifacts/linux
+
+      - name: Renomear binários
+        run: |
+          mv artifacts/windows/ScrapperHoteis.exe artifacts/ScrapperHoteis-Windows.exe
+          mv artifacts/linux/ScrapperHoteis artifacts/ScrapperHoteis-Linux
+          chmod +x artifacts/ScrapperHoteis-Linux
+
       - name: Criar Release no GitHub
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ScrapperHoteis.exe
+          files: |
+            artifacts/ScrapperHoteis-Windows.exe
+            artifacts/ScrapperHoteis-Linux
           name: "ScrapperHoteis ${{ github.ref_name }}"
           body: |
             ## ScrapperHoteis ${{ github.ref_name }}
 
+            ### Download
+            | Sistema | Arquivo |
+            |---------|---------|
+            | Windows | `ScrapperHoteis-Windows.exe` |
+            | Linux   | `ScrapperHoteis-Linux` |
+
             ### Instalação
-            1. Baixe o arquivo `ScrapperHoteis.exe`
-            2. Execute uma vez com internet para o Chromium ser instalado automaticamente
-            3. Abra o aplicativo e comece a buscar
+            **Windows:** Baixe o `.exe` e execute. Na primeira vez, o Chromium será instalado automaticamente.
+            **Linux:** Baixe o binário, dê permissão e execute:
+            ```bash
+            chmod +x ScrapperHoteis-Linux
+            ./ScrapperHoteis-Linux
+            ```
 
             > Desenvolvido por **MATTecnologia — Marcelo Teixeira**
         env:
