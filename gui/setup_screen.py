@@ -83,6 +83,10 @@ class SetupScreen(ctk.CTkToplevel):
         self._instalando = False
         self._build_ui()
 
+        # No .exe inicia a instalação automaticamente sem precisar clicar
+        if getattr(sys, "frozen", False):
+            self.after(500, self._iniciar_instalacao)
+
         # Centraliza sobre o pai
         self.update_idletasks()
         px = parent.winfo_rootx() + (parent.winfo_width()  - self.winfo_width())  // 2
@@ -213,13 +217,10 @@ class SetupScreen(ctk.CTkToplevel):
 
     def _instalar_chromium(self):
         """Roda em thread background; comunica com a GUI via self.after()."""
-        self._append_log("\n> playwright install chromium\n\n", "info")
+        cmd = self._encontrar_playwright()
+        self._append_log(f"\n> {' '.join(cmd)}\n\n", "info")
 
         try:
-            # Descobre o executável playwright
-            pw_exec = self._encontrar_playwright()
-            cmd = [pw_exec, "install", "chromium"]
-
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -268,25 +269,35 @@ class SetupScreen(ctk.CTkToplevel):
             self.after(0, self._on_erro)
 
     @staticmethod
-    def _encontrar_playwright() -> str:
-        """Retorna o caminho do executável playwright."""
-        # Se rodando como executável PyInstaller o playwright pode estar no Scripts
+    def _encontrar_playwright() -> list[str]:
+        """
+        Retorna o comando para rodar 'playwright install chromium'.
+        No .exe PyInstaller usa o driver Node.js bundlado diretamente.
+        Em dev usa o CLI playwright normal.
+        """
         if getattr(sys, "frozen", False):
-            base = os.path.dirname(sys.executable)
-            for nome in ("playwright.exe", "playwright"):
-                candidato = os.path.join(base, nome)
-                if os.path.isfile(candidato):
-                    return candidato
+            # Dentro do .exe: o driver está em _MEIPASS/playwright/driver/
+            base = sys._MEIPASS  # noqa: SLF001
+            if sys.platform == "win32":
+                node = os.path.join(base, "playwright", "driver", "node.exe")
+                cli  = os.path.join(base, "playwright", "driver", "package", "cli.js")
+            else:
+                node = os.path.join(base, "playwright", "driver", "node")
+                cli  = os.path.join(base, "playwright", "driver", "package", "cli.js")
+            if os.path.isfile(node) and os.path.isfile(cli):
+                return [node, cli, "install", "chromium"]
 
-        # Tenta via sys.executable (mesmo ambiente virtual)
-        scripts_dir = os.path.join(os.path.dirname(sys.executable), "Scripts" if sys.platform == "win32" else "")
+        # Em dev: usa o CLI playwright do ambiente
+        scripts_dir = os.path.join(
+            os.path.dirname(sys.executable),
+            "Scripts" if sys.platform == "win32" else "",
+        )
         for nome in ("playwright.exe", "playwright"):
             c = os.path.join(scripts_dir, nome)
             if os.path.isfile(c):
-                return c
+                return [c, "install", "chromium"]
 
-        # Fallback: deixa o PATH resolver
-        return "playwright"
+        return ["playwright", "install", "chromium"]
 
     # ── Pós-instalação ────────────────────────────────────────────────────────
 
