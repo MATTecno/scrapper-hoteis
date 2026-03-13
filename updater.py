@@ -11,7 +11,7 @@ import tempfile
 from urllib import request, error
 import json
 
-CURRENT_VERSION = "1.0.0"
+from version import VERSION as CURRENT_VERSION
 
 GITHUB_OWNER = "MATTecno"
 GITHUB_REPO  = "scrapper-hoteis"
