@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 from datetime import datetime, timedelta
 import os
+import sys
 import threading
 import webbrowser
 
@@ -22,7 +23,7 @@ LINK_COR   = "#1a56a0"
 
 
 class AppWindow(ctk.CTk):
-    def __init__(self):
+    def __init__(self, minimized: bool = False):
         super().__init__()
         self.title("Scrapper Hotéis")
         self.geometry("1200x760")
@@ -30,11 +31,24 @@ class AppWindow(ctk.CTk):
         self.configure(fg_color=CINZA_BG)
         self._ultimo_resultado = None
         self._worker = None
-        # links armazenados por item_id da tree
         self._links_por_item = {}
         self._build_ui()
-        # Verifica setup (Chromium) e atualizações após a janela estar visível
-        self.after(200, self._verificar_setup_inicial)
+
+        # Tray — inicia antes de qualquer withdraw para que o ícone já exista
+        from gui.tray import TrayIcon
+        self._tray = TrayIcon(self)
+        self._tray.start()
+
+        # Intercepta o botão X para minimizar para a bandeja em vez de fechar
+        self.protocol("WM_DELETE_WINDOW", self._on_fechar)
+
+        if minimized:
+            # Inicia oculto na bandeja
+            self.withdraw()
+        else:
+            # Verifica setup (Chromium) e atualizações após a janela estar visível
+            self.after(200, self._verificar_setup_inicial)
+
         # Verifica atualizações silenciosamente após 3 s
         self.after(3000, self._verificar_atualizacao_silenciosa)
         # Telemetria de startup
@@ -778,6 +792,20 @@ class AppWindow(ctk.CTk):
             messagebox.showerror("Erro", f"Não foi possível alterar inicialização automática:\n{e}")
             # reverte o checkbox
             self.var_autostart.set(not self.var_autostart.get())
+
+    # ── Tray / fechar ─────────────────────────────────────────────────────────
+
+    def _on_fechar(self):
+        """Ao clicar no X, minimiza para a bandeja em vez de fechar."""
+        self.withdraw()
+
+    def _sair_definitivo(self):
+        """Encerra o app completamente (chamado pelo menu da bandeja)."""
+        try:
+            self._tray.stop()
+        except Exception:
+            pass
+        self.destroy()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

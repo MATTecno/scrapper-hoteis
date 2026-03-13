@@ -25,7 +25,7 @@ def _win_ativar():
     chave = r"Software\Microsoft\Windows\CurrentVersion\Run"
     exe = _exe_path()
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, chave, 0, winreg.KEY_SET_VALUE) as k:
-        winreg.SetValueEx(k, APP_NAME, 0, winreg.REG_SZ, f'"{exe}"')
+        winreg.SetValueEx(k, APP_NAME, 0, winreg.REG_SZ, f'"{exe}" --minimized')
 
 
 def _win_desativar():
@@ -66,7 +66,7 @@ def _linux_ativar():
         "[Desktop Entry]\n"
         "Type=Application\n"
         f"Name={APP_NAME}\n"
-        f"Exec={exe}\n"
+        f"Exec={exe} --minimized\n"
         "Hidden=false\n"
         "NoDisplay=false\n"
         "X-GNOME-Autostart-enabled=true\n"

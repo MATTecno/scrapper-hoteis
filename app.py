@@ -19,7 +19,8 @@ def _log_fatal(exc: Exception):
 if __name__ == "__main__":
     try:
         from gui.app_window import AppWindow
-        app = AppWindow()
+        minimized = "--minimized" in sys.argv
+        app = AppWindow(minimized=minimized)
         app.mainloop()
     except Exception as e:
         _log_fatal(e)
